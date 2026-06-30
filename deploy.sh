@@ -100,7 +100,7 @@ fi
 if [ "$BUILD_FRONTEND" = "1" ]; then
   log "Building Angular frontend…"
   cd "$FRONTEND_DIR"
-  npm ci
+  npm install
   npm run build         # outputs to frontend/dist/frontend/browser (served by backend)
 else
   warn "BUILD_FRONTEND=0 — assuming frontend/dist was uploaded already."
@@ -110,7 +110,7 @@ fi
 # ───────────────────────── 5. Build + migrate backend ─────────────────
 log "Building backend and applying migrations…"
 cd "$BACKEND_DIR"
-npm ci
+npm install
 npm run build           # runs `prisma generate` then tsc
 ./node_modules/.bin/prisma migrate deploy
 
