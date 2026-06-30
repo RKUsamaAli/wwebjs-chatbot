@@ -25,7 +25,7 @@ DOMAIN="${DOMAIN:-}"                          # e.g. chat.example.com (empty = s
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@${DOMAIN:-example.com}}"
 PM2_NAME="${PM2_NAME:-wweb}"
 BUILD_FRONTEND="${BUILD_FRONTEND:-1}"        # set 0 if you upload frontend/dist yourself
-NODE_MAJOR="${NODE_MAJOR:-20}"
+NODE_MAJOR="${NODE_MAJOR:-22}"
 REPO_URL="${REPO_URL:-https://github.com/RKUsamaAli/wwebjs-chatbot.git}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 GIT_PULL="${GIT_PULL:-1}"                     # set 0 to skip pulling the latest code
