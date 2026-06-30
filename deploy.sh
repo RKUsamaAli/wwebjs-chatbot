@@ -26,6 +26,9 @@ LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@${DOMAIN:-example.com}}"
 PM2_NAME="${PM2_NAME:-wweb}"
 BUILD_FRONTEND="${BUILD_FRONTEND:-1}"        # set 0 if you upload frontend/dist yourself
 NODE_MAJOR="${NODE_MAJOR:-20}"
+REPO_URL="${REPO_URL:-https://github.com/RKUsamaAli/wwebjs-chatbot.git}"
+GIT_BRANCH="${GIT_BRANCH:-main}"
+GIT_PULL="${GIT_PULL:-1}"                     # set 0 to skip pulling the latest code
 
 log()  { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
@@ -33,6 +36,22 @@ die()  { printf '\033[1;31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "Please run as root (sudo ./deploy.sh)"
 [ -d "$BACKEND_DIR" ] && [ -d "$FRONTEND_DIR" ] || die "Run this from the wwebjs-standalone directory"
+
+# ───────────────────────── 0. Pull latest code ────────────────────────
+if [ "$GIT_PULL" = "1" ]; then
+  command -v git >/dev/null || apt-get install -y git
+  if [ -d "$APP_DIR/.git" ]; then
+    log "Pulling latest code from $REPO_URL ($GIT_BRANCH)…"
+    git -C "$APP_DIR" remote set-url origin "$REPO_URL" 2>/dev/null || \
+      git -C "$APP_DIR" remote add origin "$REPO_URL"
+    git -C "$APP_DIR" fetch origin "$GIT_BRANCH"
+    git -C "$APP_DIR" checkout "$GIT_BRANCH"
+    git -C "$APP_DIR" reset --hard "origin/$GIT_BRANCH"
+  else
+    warn "$APP_DIR is not a git repo — cloning fresh into it…"
+    git clone --branch "$GIT_BRANCH" "$REPO_URL" "$APP_DIR"
+  fi
+fi
 
 # ───────────────────────── 1. System packages ─────────────────────────
 log "Installing system dependencies (Node, Chrome, libs, PM2)…"
