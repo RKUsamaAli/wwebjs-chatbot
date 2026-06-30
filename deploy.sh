@@ -73,6 +73,10 @@ if ! command -v google-chrome-stable >/dev/null; then
 fi
 CHROME_PATH="$(command -v google-chrome-stable || true)"
 
+# Build toolchain for native node modules (better-sqlite3 compiles from source
+# when no prebuilt binary matches the Node version).
+apt-get install -y build-essential python3 make g++
+
 # Extra libraries Chromium/Chrome needs when running headless.
 apt-get install -y \
   ca-certificates fonts-liberation \
