@@ -103,7 +103,10 @@ fi
 # ───────────────────────── 3. Backend .env ────────────────────────────
 mkdir -p "$DATA_DIR"
 ENV_FILE="$BACKEND_DIR/.env"
-SERVER_IP="$(curl -fsS --max-time 5 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')"
+# Force IPv4 so the printed/CORS URL is a browser-friendly address (not IPv6).
+SERVER_IP="$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null \
+  || curl -4 -fsS --max-time 5 ifconfig.me 2>/dev/null \
+  || hostname -I | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)"
 if [ -n "$DOMAIN" ]; then ORIGIN="https://$DOMAIN"; else ORIGIN="http://${SERVER_IP}:${PORT}"; fi
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -133,7 +136,20 @@ fi
 # ───────────────────────── 5. Build + migrate backend ─────────────────
 log "Building backend and applying migrations…"
 cd "$BACKEND_DIR"
+
+# If Node was upgraded since the last deploy, native addons (better-sqlite3)
+# were compiled against the old ABI and will fail to load. Wipe node_modules
+# so npm reinstalls + recompiles them against the current Node.
+NODE_MARKER="$BACKEND_DIR/node_modules/.deploy-node-version"
+CURRENT_NODE="$(node -v)"
+if [ -d "$BACKEND_DIR/node_modules" ] && [ "$(cat "$NODE_MARKER" 2>/dev/null)" != "$CURRENT_NODE" ]; then
+  warn "Node version changed ($(cat "$NODE_MARKER" 2>/dev/null || echo none) → $CURRENT_NODE) — rebuilding backend deps from scratch…"
+  rm -rf "$BACKEND_DIR/node_modules"
+fi
+
 npm install
+npm rebuild better-sqlite3   # ensure the native addon matches the running Node ABI
+echo "$CURRENT_NODE" > "$NODE_MARKER"
 npm run build           # runs `prisma generate` then tsc
 ./node_modules/.bin/prisma migrate deploy
 
