@@ -148,13 +148,19 @@ if [ -d "$BACKEND_DIR/node_modules" ] && [ "$(cat "$NODE_MARKER" 2>/dev/null)" !
 fi
 
 npm install
-npm rebuild better-sqlite3   # ensure the native addon matches the running Node ABI
+# Compile better-sqlite3 from source against the running Node (a downloaded
+# prebuilt binary can target a different ABI → "Module did not self-register").
+npm rebuild better-sqlite3 --build-from-source
 echo "$CURRENT_NODE" > "$NODE_MARKER"
 npm run build           # runs `prisma generate` then tsc
 ./node_modules/.bin/prisma migrate deploy
 
 # ───────────────────────── 6. Start with PM2 ──────────────────────────
 log "Starting app with PM2…"
+# Reload the PM2 daemon so it runs under the current Node. After a Node upgrade
+# the old daemon keeps launching apps with the previous Node → native-addon ABI
+# mismatch ("Module did not self-register").
+pm2 update >/dev/null 2>&1 || true
 if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
   pm2 restart "$PM2_NAME" --update-env
 else
