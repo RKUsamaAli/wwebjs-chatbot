@@ -1,0 +1,45 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model WhatsappAccount {
+  id                 String   @id @default(cuid())
+  phoneNumberId      String   @unique
+  displayPhoneNumber String?
+  verifiedName       String?
+  status             String   @default("disconnected")
+  isActive           Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Message {
+  id             String    @id @default(cuid())
+  otherMessageId String?   @unique
+  direction      String    // INBOUND | OUTBOUND
+  fromDevice     String
+  toDevice       String
+  type           String    // text | image | audio | video | document
+  content        String    // JSON stringified payload
+  status         String    // SENT | DELIVERED | READ
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  seenAt         DateTime?
+  playedAt       DateTime?
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  waId      String?  @unique
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -1,0 +1,43 @@
+<div class="flex h-screen overflow-hidden surface-ground">
+  <!-- Sidebar -->
+  <div class="w-16rem flex flex-column surface-card border-right-1 surface-border h-full">
+    <!-- Header -->
+    <div class="p-3 flex align-items-center border-bottom-1 surface-border">
+      <div class="w-2rem h-2rem bg-primary border-round flex align-items-center justify-content-center mr-2">
+        <i class="pi pi-whatsapp text-white"></i>
+      </div>
+      <span class="font-bold text-xl text-900">WhatsApp CRM</span>
+    </div>
+
+    <!-- Navigation Menu -->
+    <div class="flex-auto overflow-y-auto py-2">
+      <p-menu [model]="items" styleClass="w-full border-none"></p-menu>
+    </div>
+
+    <!-- Footer / User Profile -->
+    <div class="p-3 border-top-1 surface-border flex align-items-center justify-content-between">
+      <div class="flex align-items-center gap-2 overflow-hidden">
+        <p-avatar icon="pi pi-user" shape="circle" styleClass="bg-primary text-white"></p-avatar>
+        <div class="flex flex-column overflow-hidden">
+          <span class="text-sm font-semibold text-900 white-space-nowrap text-overflow-ellipsis">Active Agent</span>
+          <span class="text-xs text-600 white-space-nowrap text-overflow-ellipsis">agent@wwebjs.local</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Area -->
+  <div class="flex-1 flex flex-column overflow-hidden">
+    <!-- Header -->
+    <header class="h-4rem surface-card border-bottom-1 surface-border flex align-items-center px-4 shadow-1 z-1">
+      <h2 class="text-xl font-medium m-0 text-800">Workspace</h2>
+    </header>
+
+    <!-- Page Content -->
+    <main class="flex-1 overflow-y-auto p-4 relative">
+      <div class="h-full w-full bg-white border-round-xl shadow-2 overflow-hidden">
+        <router-outlet></router-outlet>
+      </div>
+    </main>
+  </div>
+</div>

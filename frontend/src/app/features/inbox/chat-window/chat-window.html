@@ -1,0 +1,275 @@
+<div class="flex flex-column h-full w-full bg-bluegray-50">
+
+  <!-- ── Empty State ──────────────────────────────────────────────────────── -->
+  <div *ngIf="!messagesService.activeConversationPhone()"
+    class="flex-1 flex flex-column align-items-center justify-content-center">
+    <h2 class="text-700 m-0 font-medium">Select a conversation</h2>
+    <p class="text-500 mt-2">Choose a chat from the left menu to start messaging.</p>
+  </div>
+
+  <ng-container *ngIf="messagesService.activeConversationPhone()">
+
+    <!-- ── Chat Header ──────────────────────────────────────────────────────── -->
+    <div
+      class="p-2 px-3 bg-white flex align-items-center justify-content-between shadow-1 z-1 relative border-bottom-1 surface-border">
+      <div class="flex align-items-center gap-3">
+        <p-avatar [label]="contactsService.getContactName(messagesService.activeConversationPhone()!).substring(0, 2)"
+          shape="circle" size="large" styleClass="bg-primary text-white">
+        </p-avatar>
+        <div>
+          <div class="font-bold text-lg text-900">{{
+            contactsService.getContactName(messagesService.activeConversationPhone()!) }}</div>
+          <div class="text-sm text-500">WhatsApp Contact</div>
+        </div>
+      </div>
+
+      <div class="flex gap-1 align-items-center">
+        <!-- Message search toggle -->
+        <p-button id="chat-search-btn" icon="pi pi-search" [text]="true"
+          [severity]="messagesService.showMessageSearch() ? 'primary' : 'secondary'" pTooltip="Search messages"
+          (onClick)="toggleMessageSearch()">
+        </p-button>
+
+        <!-- Header overflow menu (Clear chat, ...) -->
+        <p-menu #headerMenu [model]="headerMenuItems" [popup]="true" appendTo="body"></p-menu>
+        <p-button icon="pi pi-ellipsis-v" [text]="true" severity="secondary" pTooltip="More"
+          (onClick)="headerMenu.toggle($event)">
+        </p-button>
+      </div>
+    </div>
+
+    <!-- ── In-chat Search Bar ───────────────────────────────────────────────── -->
+    <div *ngIf="messagesService.showMessageSearch()"
+      class="px-3 py-2 bg-white border-bottom-1 surface-border flex align-items-center gap-2"
+      style="animation: slideDown 0.2s ease;">
+      <i class="pi pi-search text-400"></i>
+      <input type="text" id="message-search-input" pInputText placeholder="Search in this conversation..."
+        class="flex-1 border-none bg-gray-100 border-round-2xl py-1 px-3" style="outline: none;"
+        [ngModel]="messagesService.messageSearch()" (ngModelChange)="onMessageSearchInput($event)" autofocus>
+      <span *ngIf="messagesService.messageSearch()" class="text-xs text-500">
+        {{ messagesService.filteredMessages.length }} result(s)
+      </span>
+      <p-button icon="pi pi-times" [text]="true" severity="secondary" (onClick)="toggleMessageSearch()"
+        styleClass="p-0 w-2rem h-2rem">
+      </p-button>
+    </div>
+
+    <!-- ── Messages Area ────────────────────────────────────────────────────── -->
+    <div #scrollContainer (scroll)="onScroll($event)" class="flex-1 overflow-y-auto px-4 py-2 relative"
+      style="background-color: #e5ddd5; background-blend-mode: multiply; opacity: 0.95;">
+
+      <!-- Loading More Indicator -->
+      <div *ngIf="messagesService.isLoadingMore()" class="flex justify-content-center py-2 w-full">
+        <i class="pi pi-spin pi-spinner text-600 text-lg"></i>
+      </div>
+
+      <div *ngFor="let msg of messagesService.filteredMessages; let i = index; trackBy: trackByMessageId"
+        [id]="'msg-' + msg.id" class="mb-2 flex flex-column w-full">
+
+        <!-- Date Divider -->
+        <div *ngIf="showDateHeader(i)" class="flex justify-content-center my-3 w-full">
+          <span class="px-3 py-1 border-round-xl bg-white-alpha-80 text-700 text-xs shadow-1" style="font-weight: 500;">
+            {{ getDateLabel(msg.createdAt) }}
+          </span>
+        </div>
+
+        <!-- Unread Divider -->
+        <div *ngIf="firstUnreadId && msg.id === firstUnreadId" class="flex justify-content-center my-2 w-full">
+          <span class="px-3 py-1 border-round-xl bg-primary text-white text-xs shadow-1" style="font-weight: 600;">
+            Unread messages
+          </span>
+        </div>
+
+        <!-- Message Bubble -->
+        <div class="flex flex-column"
+          [ngClass]="msg.direction === 'OUTBOUND' ? 'align-items-end' : 'align-items-start'">
+
+          <div class="message-hover-group flex align-items-center gap-2"
+            [ngClass]="msg.direction === 'OUTBOUND' ? 'flex-row-reverse' : 'flex-row'" style="max-width: 85%;">
+
+          <div class="p-2 border-round-xl shadow-1 relative overflow-hidden"
+            [class.unread-highlight]="unreadIds.has(msg.id)"
+            [ngClass]="msg.direction === 'OUTBOUND' ? 'bg-green-100' : 'bg-white'"
+            [style.border-bottom-right-radius]="msg.direction === 'OUTBOUND' ? '4px' : '1rem'"
+            [style.border-bottom-left-radius]="msg.direction === 'OUTBOUND' ? '1rem' : '4px'" style="max-width: 85%;">
+
+            <div class="text-sm line-height-3 text-break" style="white-space: pre-wrap;">
+
+              <!-- Quoted / replied-to snippet -->
+              <div *ngIf="msg.content?.context" class="quoted-snippet mb-1 px-2 py-1 border-round"
+                [ngClass]="msg.direction === 'OUTBOUND' ? 'bg-green-200' : 'bg-gray-100'">
+                <div class="font-semibold text-xs text-primary mb-1">
+                  {{ getQuotedSender(msg.content.context) }}
+                </div>
+                <div class="text-xs text-700 white-space-normal" style="overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+                  {{ getQuotedPreview(msg.content.context) }}
+                </div>
+              </div>
+
+              <!-- Image -->
+              <div *ngIf="msg.type === 'image'" class="relative border-round overflow-hidden mb-2"
+                style="max-width: 250px;">
+                <img [src]="getMediaSrc(msg)" alt="Image" class="w-full border-round" style="object-fit: contain;">
+              </div>
+
+              <!-- Audio -->
+              <div *ngIf="msg.type === 'audio'" class="mb-1 audio-player-container"
+                [ngClass]="{'outbound-audio': msg.direction === 'OUTBOUND', 'inbound-audio': msg.direction === 'INBOUND'}">
+                <audio [src]="getMediaSrc(msg)" controls style="height: 40px; min-width: 280px;"></audio>
+              </div>
+
+              <!-- Text -->
+              <span *ngIf="msg.type === 'text'">{{ getContent(msg) }}</span>
+              <span *ngIf="msg.type === 'image' && msg.content?.image?.caption" class="mt-1 block">
+                {{ msg.content.image.caption }}
+              </span>
+              <span *ngIf="msg.type !== 'text' && msg.type !== 'image' && msg.type !== 'audio'">
+                {{ getContent(msg) }}
+              </span>
+            </div>
+
+            <!-- Timestamp + status tick -->
+            <div class="flex justify-content-end align-items-center gap-1 mt-1">
+              <span class="text-xs text-600">{{ msg.createdAt | date:'shortTime' }}</span>
+              <i *ngIf="msg.direction === 'OUTBOUND' || msg.status === 'FAILED'" class="pi text-xs" [ngClass]="{
+                   'pi-spin pi-spinner text-500':  msg.direction === 'OUTBOUND' && (msg.status === 'UPLOADING' || msg.status === 'PENDING'),
+                   'pi-check text-500':            msg.direction === 'OUTBOUND' && msg.status === 'SENT',
+                   'pi-check-circle text-500':     msg.direction === 'OUTBOUND' && msg.status === 'DELIVERED',
+                   'pi-check-circle text-blue-500': msg.direction === 'OUTBOUND' && (msg.status === 'READ' || msg.status === 'PLAYED'),
+                   'pi-exclamation-circle text-red-500 cursor-pointer': msg.status === 'FAILED'
+                 }" [pTooltip]="msg.status === 'FAILED' ? msg.error : getStatusTooltip(msg)"
+                tooltipStyleClass="status-tooltip">
+              </i>
+            </div>
+          </div>
+
+          <!-- Hover reply button -->
+          <button type="button" class="reply-btn p-link border-circle bg-white shadow-1 flex align-items-center justify-content-center"
+            style="width: 1.75rem; height: 1.75rem; border: none; cursor: pointer;" pTooltip="Reply"
+            (click)="setReply(msg)">
+            <i class="pi pi-reply text-600" style="font-size: 0.8rem;"></i>
+          </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- No search results message -->
+      <div
+        *ngIf="messagesService.showMessageSearch() && messagesService.messageSearch() && messagesService.filteredMessages.length === 0"
+        class="flex align-items-center justify-content-center py-8">
+        <span class="text-500 text-sm">No messages match "{{ messagesService.messageSearch() }}"</span>
+      </div>
+    </div>
+
+    <!-- ── Reply Preview Bar ────────────────────────────────────────────────── -->
+    <div *ngIf="replyingTo"
+      class="px-3 py-2 bg-white border-top-1 surface-border flex align-items-center gap-2"
+      style="animation: slideDown 0.2s ease;">
+      <div class="border-left-3 border-primary pl-2 flex-1 overflow-hidden">
+        <div class="font-semibold text-xs text-primary">
+          Replying to {{ getReplyTargetName(replyingTo) }}
+        </div>
+        <div class="text-xs text-600 white-space-nowrap overflow-hidden text-overflow-ellipsis">
+          {{ getContent(replyingTo) }}
+        </div>
+      </div>
+      <p-button icon="pi pi-times" [text]="true" severity="secondary" (onClick)="cancelReply()"
+        styleClass="p-0 w-2rem h-2rem">
+      </p-button>
+    </div>
+
+    <!-- ── Message Composer ──────────────────────────────────────────────────── -->
+    <div class="p-2 px-3 bg-white flex align-items-end gap-2 shadow-1 z-1 relative border-top-1 surface-border">
+
+      <!-- STANDARD COMPOSER -->
+      <ng-container *ngIf="recordingState === 'inactive'">
+        <!-- Hidden file input -->
+        <input type="file" #fileInput (change)="onFileSelected($event)" [accept]="currentAccept" hidden>
+
+        <!-- Attachment Menu -->
+        <p-menu #attachMenu [model]="attachmentOptions" [popup]="true" appendTo="body"></p-menu>
+        <p-button icon="pi pi-plus" [text]="true" severity="secondary" pTooltip="Attach"
+          (onClick)="attachMenu.toggle($event)">
+        </p-button>
+
+        <!-- Message textarea -->
+        <div class="flex-1 relative">
+          <textarea pInputTextarea [(ngModel)]="newMessage" [autoResize]="true" rows="1"
+            class="w-full border-round-3xl py-2 px-3 bg-gray-100 border-none" placeholder="Type a message..."
+            (keydown.enter)="!$any($event).shiftKey && sendMessage(); !$any($event).shiftKey && $event.preventDefault()">
+          </textarea>
+        </div>
+
+        <!-- Mic / Send / Uploading button -->
+        <p-button *ngIf="!newMessage.trim() && !isUploading" icon="pi pi-microphone" [rounded]="true"
+          severity="secondary" (onClick)="startRecording()">
+        </p-button>
+        <p-button *ngIf="newMessage.trim() && !isUploading" icon="pi pi-send" [rounded]="true"
+          (onClick)="sendMessage()">
+        </p-button>
+        <p-button *ngIf="isUploading" icon="pi pi-spin pi-spinner" [rounded]="true" severity="secondary"
+          [disabled]="true">
+        </p-button>
+      </ng-container>
+
+      <!-- RECORDING COMPOSER -->
+      <div *ngIf="recordingState !== 'inactive'"
+        class="flex w-full align-items-center bg-gray-100 border-round-3xl px-3 py-2 border-none">
+        <p-button icon="pi pi-trash" [text]="true" severity="danger" (onClick)="cancelRecording()" pTooltip="Cancel"
+          styleClass="p-0 w-2rem h-2rem">
+        </p-button>
+
+        <div class="flex-1 flex align-items-center gap-3 px-3 justify-content-center">
+          <div class="flex align-items-center gap-2 text-red-500 font-semibold"
+            [style.opacity]="recordingState === 'recording' ? '1' : '0.5'">
+            <i class="pi pi-circle-fill text-xs" style="animation: pulse 1.5s infinite"
+              *ngIf="recordingState === 'recording'"></i>
+            <i class="pi pi-pause-circle text-xs" *ngIf="recordingState === 'paused'"></i>
+            <span style="font-variant-numeric: tabular-nums;">{{ formatDuration(recordingDuration) }}</span>
+          </div>
+        </div>
+
+        <p-button *ngIf="recordingState === 'recording'" icon="pi pi-pause" [rounded]="true" [text]="true"
+          severity="secondary" (onClick)="pauseRecording()" styleClass="p-0 w-2rem h-2rem mr-2">
+        </p-button>
+        <p-button *ngIf="recordingState === 'paused'" icon="pi pi-play" [rounded]="true" [text]="true"
+          severity="secondary" (onClick)="resumeRecording()" styleClass="p-0 w-2rem h-2rem mr-2">
+        </p-button>
+
+        <p-button icon="pi pi-send" [rounded]="true" severity="success" (onClick)="sendRecording()"
+          styleClass="w-2rem h-2rem">
+        </p-button>
+
+        <style>
+          @keyframes pulse {
+            0% {
+              opacity: 1;
+            }
+
+            50% {
+              opacity: 0.3;
+            }
+
+            100% {
+              opacity: 1;
+            }
+          }
+
+          @keyframes slideDown {
+            from {
+              opacity: 0;
+              transform: translateY(-8px);
+            }
+
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        </style>
+      </div>
+
+    </div>
+
+  </ng-container>
+</div>

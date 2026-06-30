@@ -1,0 +1,37 @@
+/* ChatWindow styling */
+.text-break {
+  word-break: break-word;
+}
+
+/* Hover-reveal reply button on message bubbles */
+.message-hover-group {
+  .reply-btn {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  &:hover .reply-btn {
+    opacity: 1;
+  }
+}
+
+/* Quoted / replied-to snippet inside a bubble */
+.quoted-snippet {
+  border-left: 3px solid var(--primary-color, #10b981);
+}
+
+/* Highlight for messages that were unread when the conversation was opened */
+.unread-highlight {
+  box-shadow: 0 0 0 2px var(--primary-color, #10b981) !important;
+  animation: unreadPulse 1.2s ease-in-out 1;
+}
+
+@keyframes unreadPulse {
+  0% {
+    background-color: rgba(16, 185, 129, 0.18);
+  }
+  100% {
+    background-color: inherit;
+  }
+}

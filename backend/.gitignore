@@ -1,0 +1,33 @@
+# ── Dependencies ──────────────────────────────────────────────
+/node_modules
+
+# ── Build output (regenerated on deploy via `npm run build`) ──
+/dist
+
+# ── Secrets / environment ─────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Prisma local database (SQLite) ────────────────────────────
+# Migrations ARE committed; the local DB file is not.
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+/prisma/dev.db
+/prisma/*.db
+
+# ── Runtime data (must NOT be in git) ─────────────────────────
+# WhatsApp Web session cache — re-created at runtime; committing it
+# leaks the session and bloats the repo.
+/.wwebjs_auth/
+/.wwebjs_cache/
+# User-uploaded / downloaded media
+/uploads/
+
+# ── Logs & misc ───────────────────────────────────────────────
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

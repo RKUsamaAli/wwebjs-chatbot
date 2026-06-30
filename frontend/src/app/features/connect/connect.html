@@ -1,0 +1,108 @@
+<p-toast></p-toast>
+<div class="p-4 w-full h-full flex justify-content-center">
+  <div class="w-full max-w-4xl flex flex-column gap-4">
+
+    <!-- WhatsApp Web JS integration card -->
+    <p-card header="Connect via WhatsApp Web (Beta / Unofficial)" styleClass="shadow-2 border-round">
+      <p class="text-600 mb-4">
+        Connect your account by scanning a QR code. This method runs a headless browser instance in the backend that
+        connects directly to the WhatsApp Web interface.
+      </p>
+
+      <!-- Warning Consent Banner -->
+      @if (wwebStatus() === 'DISCONNECTED') {
+      <div class="p-3 mb-4 border-round border-1" style="background:#fef2f2; border-color:#fee2e2; color:#991b1b;">
+        <div class="flex gap-2 align-items-start">
+          <i class="pi pi-exclamation-triangle mt-1" style="font-size: 1.25rem;"></i>
+          <div class="flex flex-column gap-1">
+            <span class="font-bold text-lg">Important Policy & Risk Warning</span>
+            <span class="text-sm line-height-3">
+              This integration uses an unofficial automation library (<code>whatsapp-web.js</code>).
+              Meta/WhatsApp actively discourages and blocks accounts found using unofficial automations.
+              By linking your device, you acknowledge that **your account may be temporarily or permanently
+              suspended/blocked** by WhatsApp.
+              Use this feature entirely at your own risk. We strongly recommend using a secondary or non-critical phone
+              number.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Consent Checkbox -->
+      <div class="flex align-items-center gap-2 mb-4">
+        <p-checkbox [ngModel]="wwebConsent()" (ngModelChange)="wwebConsent.set($event)" [binary]="true" inputId="wwebConsentCheck"></p-checkbox>
+        <label for="wwebConsentCheck" class="text-800 font-medium cursor-pointer select-none">
+          I understand the policies and accept the risk of account blocking.
+        </label>
+      </div>
+      }
+
+      <!-- Status details -->
+      <div class="mb-4">
+        <span class="font-medium text-700 mr-2">Current Connection Status:</span>
+        @switch (wwebStatus()) {
+        @case ('INITIALIZING') {
+        <p-tag value="Initializing Browser..." severity="warn"></p-tag>
+        }
+        @case ('QR_READY') {
+        <p-tag value="Ready to Scan" severity="info"></p-tag>
+        }
+        @case ('CONNECTED') {
+        <p-tag value="Connected" severity="success"></p-tag>
+        }
+        @default {
+        <p-tag value="Disconnected" severity="secondary"></p-tag>
+        }
+        }
+      </div>
+
+      <!-- Connection actions / Display QR -->
+      <div class="flex flex-column gap-3">
+        @if (wwebStatus() === 'DISCONNECTED') {
+        <p-button label="Connect WhatsApp Web" icon="pi pi-qrcode" styleClass="w-full sm:w-auto"
+          [disabled]="!wwebConsent() || wwebLoading()" [loading]="wwebLoading()" (onClick)="connectWweb()"></p-button>
+        } @else if (wwebStatus() === 'INITIALIZING') {
+        <div class="flex align-items-center gap-3 p-3 border-round surface-100">
+          <i class="pi pi-spin pi-spinner text-primary" style="font-size: 1.5rem"></i>
+          <span class="text-600">Launching virtual browser in the backend. Please wait...</span>
+        </div>
+        } @else if (wwebStatus() === 'QR_READY') {
+        <div class="flex flex-column align-items-center gap-3 p-4 border-round surface-100">
+          <span class="font-bold text-800 text-center">Scan this QR Code with WhatsApp on your phone</span>
+          @if (wwebQr()) {
+          <div class="p-3 bg-white border-round shadow-1">
+            <img [src]="wwebQr()" alt="WhatsApp Web QR Code" style="max-width: 250px; display: block;" />
+          </div>
+          } @else {
+          <div class="flex justify-content-center p-4">
+            <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+          </div>
+          }
+          <ol class="text-sm text-600 pl-4 m-0 line-height-3 max-w-sm">
+            <li>Open WhatsApp on your phone.</li>
+            <li>Tap <strong>Menu</strong> or <strong>Settings</strong> and select <strong>Linked Devices</strong>.</li>
+            <li>Tap <strong>Link a Device</strong> and point your phone to scan the QR code above.</li>
+          </ol>
+          <p-button label="Cancel Connection" icon="pi pi-times" severity="danger" [outlined]="true"
+            [loading]="wwebLoading()" (onClick)="disconnectWweb()"></p-button>
+        </div>
+        } @else if (wwebStatus() === 'CONNECTED') {
+        <div class="flex align-items-center justify-content-between p-3 border-round border-1 surface-border"
+          style="border-left: 4px solid var(--green-500);">
+          <div class="flex flex-column gap-1">
+            <span class="font-bold text-900">
+              {{ wwebInfo()?.pushname || 'WhatsApp Web User' }}
+            </span>
+            <span class="text-500 text-sm">
+              Phone: +{{ wwebInfo()?.wid?.user }} · Platform: {{ wwebInfo()?.platform || 'Web' }}
+            </span>
+          </div>
+          <p-button label="Log Out / Disconnect" icon="pi pi-power-off" severity="danger" size="small"
+            [loading]="wwebLoading()" (onClick)="disconnectWweb()"></p-button>
+        </div>
+        }
+      </div>
+    </p-card>
+
+  </div>
+</div>

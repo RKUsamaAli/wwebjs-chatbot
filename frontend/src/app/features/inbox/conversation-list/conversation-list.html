@@ -1,0 +1,84 @@
+<div class="flex flex-column h-full border-right-1 surface-border bg-white w-20rem">
+  <!-- Search Header -->
+  <div class="p-3 border-bottom-1 surface-border flex align-items-center gap-2">
+    <span class="p-input-icon-left flex-1 relative">
+      <i class="pi pi-search"
+        style="left: 0.75rem; top: 50%; transform: translateY(-50%); position: absolute; color: #94a3b8;"></i>
+      <input type="text" pInputText placeholder="Search chats..."
+        class="w-full border-round-2xl border-none shadow-1 bg-gray-50" style="padding-left: 2.25rem;"
+        [ngModel]="messagesService.conversationSearch()" (ngModelChange)="onSearchInput($event)"
+        id="conversation-search-input">
+    </span>
+    <!-- New chat -->
+    <p-button icon="pi pi-pen-to-square" [rounded]="true" pTooltip="New chat" tooltipPosition="bottom"
+      id="new-chat-btn" (onClick)="openNewChat()">
+    </p-button>
+  </div>
+
+  <!-- New Chat Dialog -->
+  <p-dialog header="New chat" [(visible)]="showNewChatDialog" [modal]="true" [draggable]="false"
+    [style]="{ width: '22rem' }" [dismissableMask]="true">
+    <div class="flex flex-column gap-3 pt-2">
+      <div class="flex flex-column gap-1">
+        <label class="text-sm font-medium text-700">Phone number</label>
+        <input type="tel" pInputText placeholder="e.g. 923001234567" class="w-full"
+          [(ngModel)]="newChatPhone" (keydown.enter)="startNewChat()" autofocus>
+        <small class="text-500">Digits only, including country code.</small>
+      </div>
+      <div class="flex flex-column gap-1">
+        <label class="text-sm font-medium text-700">Name <span class="text-400">(optional)</span></label>
+        <input type="text" pInputText placeholder="Contact name" class="w-full"
+          [(ngModel)]="newChatName" (keydown.enter)="startNewChat()">
+      </div>
+    </div>
+    <ng-template pTemplate="footer">
+      <p-button label="Cancel" [text]="true" severity="secondary" (onClick)="showNewChatDialog = false"></p-button>
+      <p-button label="Start chat" icon="pi pi-send" (onClick)="startNewChat()"></p-button>
+    </ng-template>
+  </p-dialog>
+
+  <!-- List -->
+  <div class="flex-1 overflow-y-auto">
+    <div *ngIf="messagesService.isLoading()" class="p-4 text-center text-500">
+      <i class="pi pi-spin pi-spinner text-2xl"></i>
+    </div>
+
+    <div *ngIf="!messagesService.isLoading() && messagesService.filteredConversations.length === 0"
+      class="p-4 text-center text-500">
+      <span *ngIf="messagesService.conversationSearch()">No chats match "{{ messagesService.conversationSearch() }}"</span>
+      <span *ngIf="!messagesService.conversationSearch()">No conversations found.</span>
+    </div>
+
+    <div *ngFor="let conv of messagesService.filteredConversations; trackBy: trackByPhone"
+      class="flex align-items-center p-3 cursor-pointer transition-colors transition-duration-150 border-bottom-1 surface-border hover:bg-gray-50"
+      [ngClass]="{'bg-blue-50': messagesService.activeConversationPhone() === conv.phone}"
+      (click)="selectConversation(conv.phone)">
+
+      <p-avatar icon="pi pi-user" shape="circle" size="large"></p-avatar>
+
+      <div class="ml-3 flex-1 overflow-hidden">
+        <div class="flex justify-content-between align-items-center mb-1">
+          <div class="flex align-items-center gap-2">
+            <span class="font-bold text-overflow-ellipsis white-space-nowrap overflow-hidden text-900"
+              style="max-width: 130px;">{{ contactsService.getContactName(conv.phone) }}</span>
+          </div>
+          <span class="text-xs text-600">{{ conv.lastMessage.createdAt | date:'shortTime' }}</span>
+        </div>
+
+        <div class="flex justify-content-between align-items-center">
+          <div
+            class="text-sm text-overflow-ellipsis white-space-nowrap overflow-hidden pr-2 flex align-items-center gap-1 text-600"
+            style="max-width: 140px;">
+            <i *ngIf="conv.lastMessage.direction === 'OUTBOUND'" class="pi pi-check text-xs mr-1"
+              [class.text-blue-500]="conv.lastMessage.status === 'READ'"></i>
+            <span>{{ getPreview(conv) }}</span>
+          </div>
+          <!-- Only show badge if this conversation is NOT currently active -->
+          <p-badge *ngIf="conv.unreadCount > 0 && messagesService.activeConversationPhone() !== conv.phone"
+            [value]="conv.unreadCount.toString()" severity="success">
+          </p-badge>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
