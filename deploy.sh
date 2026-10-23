@@ -22,6 +22,8 @@ FRONTEND_DIR="$APP_DIR/frontend"
 DATA_DIR="${DATA_DIR:-/root/wweb-data}"      # persistent DB lives here
 PORT="${PORT:-3000}"
 DOMAIN="${DOMAIN:-}"                          # e.g. chat.example.com (empty = skip Nginx/SSL)
+# Accept "https://chat.example.com/" too — keep only the bare hostname.
+DOMAIN="$(printf '%s' "$DOMAIN" | sed -E 's#^[a-zA-Z]+://##; s#[/:].*$##')"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@${DOMAIN:-example.com}}"
 PM2_NAME="${PM2_NAME:-wweb}"
 BUILD_FRONTEND="${BUILD_FRONTEND:-1}"        # set 0 if you upload frontend/dist yourself
@@ -173,7 +175,10 @@ pm2 startup systemd -u root --hp /root >/dev/null 2>&1 || true
 if [ -n "$DOMAIN" ]; then
   log "Configuring Nginx reverse proxy for $DOMAIN…"
   command -v nginx >/dev/null || apt-get install -y nginx
-  cat > "/etc/nginx/sites-available/${DOMAIN}.conf" <<EOF
+  mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+  grep -q 'sites-enabled' /etc/nginx/nginx.conf || \
+    sed -i 's|^\(\s*\)include /etc/nginx/conf.d/\*.conf;|&\n\1include /etc/nginx/sites-enabled/*;|' /etc/nginx/nginx.conf
+  cat >"/etc/nginx/sites-available/${DOMAIN}.conf" <<EOF
 server {
     listen 80;
     server_name ${DOMAIN};
