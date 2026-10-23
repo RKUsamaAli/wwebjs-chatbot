@@ -27,6 +27,11 @@ export interface Conversation {
   unreadCount: number;
 }
 
+/** Chronological order, so optimistic/failed temp messages sit where they were sent. */
+function sortByTime(msgs: Message[]): Message[] {
+  return [...msgs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -62,7 +67,7 @@ export class MessagesService {
           m => m.id === msg.id || (m.otherMessageId && m.otherMessageId === msg.otherMessageId)
         );
         if (!exists) {
-          this.activeMessages.update(msgs => [...msgs, msg]);
+          this.activeMessages.update(msgs => sortByTime([...msgs, msg]));
           if (msg.direction === 'INBOUND' && msg.status !== 'READ') {
             this.markConversationAsRead(activePhone, [msg]);
           }
@@ -246,7 +251,7 @@ export class MessagesService {
             const tempMessages = this.activeMessages().filter(
               m => m.id.startsWith('temp-') && (m.status === 'UPLOADING' || m.status === 'PENDING' || m.status === 'FAILED')
             );
-            this.activeMessages.set([...apiMessages, ...tempMessages]);
+            this.activeMessages.set(sortByTime([...apiMessages, ...tempMessages]));
             this.markConversationAsRead(phone, apiMessages);
           } else {
             this.activeMessages.update(msgs => [...apiMessages, ...msgs]);

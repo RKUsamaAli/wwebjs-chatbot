@@ -4,7 +4,7 @@
   "description": "Standalone backend for WhatsApp Web JS integration",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch --tsconfig tsconfig.json src/index.ts",
+    "dev": "prisma migrate deploy && tsx watch --tsconfig tsconfig.json src/index.ts",
     "build": "prisma generate && tsc --project tsconfig.json",
     "start": "prisma migrate deploy && node dist/index.js",
     "postinstall": "prisma generate",

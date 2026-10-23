@@ -397,6 +397,42 @@ async function resolveQuoted(
 }
 
 /**
+ * client.sendMessage() can deliver the message yet resolve to undefined — WhatsApp
+ * re-keys messages sent into a migrated (@c.us → @lid) chat, so the library's
+ * Msg.get(newMsgKey) lookup misses. The message still fires `message_create` with its
+ * real id (the same id later used by `message_ack`), so we capture it from there.
+ */
+async function sendAndResolve(client: any, chatId: string, content: any, options: any, matchBody?: string): Promise<any> {
+  const startedAt = Math.floor(Date.now() / 1000) - 5;
+  const created: any[] = [];
+  const onCreate = (m: any) => {
+    if (m?.fromMe && m.timestamp >= startedAt && (matchBody === undefined || m.body === matchBody)) {
+      created.push(m);
+    }
+  };
+  client.on('message_create', onCreate);
+
+  try {
+    const sent = await client.sendMessage(chatId, content, options);
+    if (sent?.id?.id) return sent;
+
+    logger.warn({ chatId }, 'sendMessage returned no message; recovering it from message_create');
+    for (let attempt = 0; attempt < 10 && created.length === 0; attempt++) {
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    const match = created[created.length - 1];
+    if (match?.id?.id) return match;
+  } finally {
+    client.off('message_create', onCreate);
+  }
+
+  // Message was handed to WhatsApp but we couldn't read it back — still record it
+  // locally rather than reporting a failure for a message the recipient received.
+  const fallbackId = `local_${Date.now()}`;
+  return { id: { id: fallbackId, _serialized: fallbackId } };
+}
+
+/**
  * Sends a text message via WhatsApp Web and registers it in the DB.
  */
 export async function sendText(to: string, body: string, quotedMessageId?: string): Promise<any> {
@@ -427,7 +463,7 @@ export async function sendText(to: string, body: string, quotedMessageId?: strin
   }
 
   logger.info({ sendChatId, waId, body, quotedMessageId, quoted: !!sendOptions.quotedMessageId }, 'Sending text message via WhatsApp Web...');
-  const wwebMsg = await client.sendMessage(sendChatId, body, sendOptions);
+  const wwebMsg = await sendAndResolve(client, sendChatId, body, sendOptions, body);
   const targetPhone = await linkContactAndGetPhone(cleanTo, waId);
 
   const modifiedContent: any = {
@@ -537,7 +573,7 @@ export async function sendMedia(
     mediaOptions.quotedMessageId = quotedSerializedId;
     mediaOptions.ignoreQuoteErrors = true;
   }
-  const wwebMsg = await client.sendMessage(sendChatId, media, mediaOptions);
+  const wwebMsg = await sendAndResolve(client, sendChatId, media, mediaOptions);
 
   const targetPhone = await linkContactAndGetPhone(cleanTo, waId);
 
