@@ -9,6 +9,17 @@ import { getIO, emitMessageCreated, emitMessageStatusUpdated } from '../../lib/s
 const AUTH_PATH = path.join(__dirname, '../../../.wwebjs_auth');
 const UPLOADS_DIR = path.join(__dirname, '../../../uploads');
 
+/** WhatsApp system events that arrive as messages but aren't part of the conversation. */
+export const SYSTEM_MESSAGE_TYPES = [
+  'e2e_notification',
+  'notification_template',
+  'notification',
+  'gp2',
+  'call_log',
+  'protocol',
+  'ciphertext',
+];
+
 export class WhatsappWebManager {
   private static instance: WhatsappWebManager;
   private client: any = null;
@@ -197,6 +208,9 @@ export class WhatsappWebManager {
 
         // Do not process messages from status updates or groups
         if (msg.from.endsWith('@g.us') || msg.from === 'status@broadcast') {
+          return;
+        }
+        if (SYSTEM_MESSAGE_TYPES.includes(msg.type)) {
           return;
         }
 
@@ -392,6 +406,16 @@ export class WhatsappWebManager {
       }
     });
 
+    // ── Chat read elsewhere (e.g. on the phone) ─────────────────────────────
+    client.on('unread_count', async (chat: any) => {
+      if (chat?.unreadCount !== 0 || chat.isGroup) return;
+      try {
+        await markChatReadLocally(client, chat.id._serialized);
+      } catch (err) {
+        logger.warn({ err, chatId: chat?.id?._serialized }, 'Failed to sync chat read state');
+      }
+    });
+
     this.client = client;
     await client.initialize();
   }
@@ -490,6 +514,46 @@ export class WhatsappWebManager {
       logger.warn('Socket.io server not ready — could not emit wweb:qr');
     }
   }
+}
+
+/**
+ * Marks all unread inbound messages of a WhatsApp chat as READ in the DB and
+ * notifies the frontend, so the CRM badge clears when the chat is read on the phone.
+ */
+async function markChatReadLocally(client: any, chatId: string): Promise<void> {
+  let phone = chatId.split('@')[0];
+  if (chatId.endsWith('@lid')) {
+    const mapped = await client.getContactLidAndPhone([chatId]).catch(() => null);
+    if (mapped?.[0]?.pn) phone = mapped[0].pn.split('@')[0];
+  }
+
+  const unread = await prisma.message.findMany({
+    where: {
+      direction: 'INBOUND',
+      status: { not: 'READ' },
+      OR: [{ fromDevice: phone }, { content: { contains: `"jid":"${chatId}"` } }],
+    },
+  });
+  if (unread.length === 0) return;
+
+  const seenAt = new Date();
+  await prisma.message.updateMany({
+    where: { id: { in: unread.map((m) => m.id) } },
+    data: { status: 'READ', seenAt },
+  });
+
+  for (const m of unread) {
+    emitMessageStatusUpdated({
+      messageId: m.id,
+      otherMessageId: m.otherMessageId || '',
+      status: 'READ',
+      sentAt: m.sentAt?.toISOString() || null,
+      deliveredAt: m.deliveredAt?.toISOString() || null,
+      seenAt: seenAt.toISOString(),
+      phone: m.fromDevice,
+    });
+  }
+  logger.info({ chatId, phone, count: unread.length }, 'Synced chat read state from WhatsApp');
 }
 
 /**

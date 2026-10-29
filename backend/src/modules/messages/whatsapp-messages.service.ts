@@ -9,7 +9,7 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 
 import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
-import { whatsappWebManager } from '../whatsapp-web/whatsapp-web.service';
+import { whatsappWebManager, SYSTEM_MESSAGE_TYPES } from '../whatsapp-web/whatsapp-web.service';
 import { emitMessageCreated, emitMessageStatusUpdated } from '../../lib/socketServer';
 
 const UPLOADS_DIR = path.join(__dirname, '../../../uploads');
@@ -192,6 +192,7 @@ async function getPhoneCandidates(phone: string): Promise<string[]> {
         ]
       },
       select: {
+        direction: true,
         fromDevice: true,
         toDevice: true,
         content: true
@@ -199,9 +200,11 @@ async function getPhoneCandidates(phone: string): Promise<string[]> {
       take: 50
     });
 
+    // Only collect the contact's side of each message. The other side is our own
+    // number/LID, and adding it would pull every chat into this conversation.
     for (const msg of relatedMessages) {
-      candidates.add(msg.fromDevice);
-      candidates.add(msg.toDevice);
+      const inbound = msg.direction === 'INBOUND';
+      candidates.add(inbound ? msg.fromDevice : msg.toDevice);
 
       try {
         const content = JSON.parse(msg.content);
@@ -209,11 +212,9 @@ async function getPhoneCandidates(phone: string): Promise<string[]> {
           const jidUser = content.jid.split('@')[0];
           if (jidUser) candidates.add(jidUser);
         }
-        if (content.to) {
-          candidates.add(content.to);
-        }
-        if (content.from) {
-          candidates.add(content.from);
+        const counterpart = inbound ? content.from : content.to;
+        if (counterpart) {
+          candidates.add(counterpart);
         }
       } catch (e) { }
     }
@@ -223,6 +224,10 @@ async function getPhoneCandidates(phone: string): Promise<string[]> {
 
   candidates.delete('business');
   candidates.delete('me');
+  if (whatsappWebManager.isConnected()) {
+    const me = whatsappWebManager.getClient().info?.wid?.user;
+    if (me && me !== cleanPhone) candidates.delete(me);
+  }
 
   return Array.from(candidates);
 }
@@ -648,35 +653,54 @@ export async function markAsRead(messageId: string): Promise<any> {
     }
   });
 
-  if (message && whatsappWebManager.isConnected()) {
-    const client = whatsappWebManager.getClient();
-    const cleanPhone = message.direction === 'OUTBOUND' ? message.toDevice : message.fromDevice;
-    const waId = await resolveWaId(cleanPhone, client);
+  if (!message) {
+    return { success: true };
+  }
 
+  const cleanPhone = message.direction === 'OUTBOUND' ? message.toDevice : message.fromDevice;
+
+  // Persist the read state first: it must not depend on WhatsApp's sendSeen
+  // succeeding, or the unread badge comes back on every reload.
+  if (message.status !== 'READ') {
+    const updatedMsg = await prisma.message.update({
+      where: { id: message.id },
+      data: { status: 'READ', seenAt: new Date() },
+    });
+
+    emitMessageStatusUpdated({
+      messageId: updatedMsg.id,
+      otherMessageId: updatedMsg.otherMessageId || '',
+      status: updatedMsg.status,
+      sentAt: updatedMsg.sentAt?.toISOString() || null,
+      deliveredAt: updatedMsg.deliveredAt?.toISOString() || null,
+      seenAt: updatedMsg.seenAt?.toISOString() || null,
+      phone: cleanPhone,
+    });
+  }
+
+  if (whatsappWebManager.isConnected()) {
+    const client = whatsappWebManager.getClient();
     try {
+      const waId = await resolveWaId(cleanPhone, client);
       const chat = await client.getChatById(waId);
       await chat.sendSeen();
-
-      const updatedMsg = await prisma.message.update({
-        where: { id: message.id },
-        data: { status: 'READ', seenAt: new Date() },
-      });
-
-      emitMessageStatusUpdated({
-        messageId: updatedMsg.id,
-        otherMessageId: updatedMsg.otherMessageId || '',
-        status: updatedMsg.status,
-        sentAt: updatedMsg.sentAt?.toISOString() || null,
-        deliveredAt: updatedMsg.deliveredAt?.toISOString() || null,
-        seenAt: updatedMsg.seenAt?.toISOString() || null,
-        phone: cleanPhone,
-      });
     } catch (err) {
       logger.warn({ err }, 'Failed to mark message as read via WhatsApp Web JS');
     }
   }
 
   return { success: true };
+}
+
+/**
+ * Messages belonging to a contact: inbound ones they sent, outbound ones sent to them.
+ * Matching on direction keeps our own number (the other side) from leaking other chats in.
+ */
+function conversationFilter(candidates: string[]): any[] {
+  return [
+    { direction: 'INBOUND', fromDevice: { in: candidates } },
+    { direction: 'OUTBOUND', toDevice: { in: candidates } },
+  ];
 }
 
 /**
@@ -687,12 +711,7 @@ export async function clearConversation(phone: string): Promise<{ deleted: numbe
   const candidates = await getPhoneCandidates(cleanPhone);
 
   const result = await prisma.message.deleteMany({
-    where: {
-      OR: [
-        { fromDevice: { in: candidates } },
-        { toDevice: { in: candidates } },
-      ],
-    },
+    where: { OR: conversationFilter(candidates) },
   });
 
   logger.info({ phone: cleanPhone, deleted: result.count }, 'Cleared conversation messages');
@@ -717,11 +736,10 @@ export async function getMessages(
   if (phone) {
     const cleanPhone = phone.replace(/[+\s-]/g, '');
     const candidates = await getPhoneCandidates(cleanPhone);
-    where.OR = [
-      { fromDevice: { in: candidates } },
-      { toDevice: { in: candidates } },
-    ];
+    where.OR = conversationFilter(candidates);
   }
+  // WhatsApp system events (security-code changes, template notices…) aren't chat messages.
+  where.type = { notIn: SYSTEM_MESSAGE_TYPES };
 
   const [messages, total] = await Promise.all([
     prisma.message.findMany({

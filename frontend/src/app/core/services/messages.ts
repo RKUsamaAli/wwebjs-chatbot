@@ -139,6 +139,8 @@ export class MessagesService {
               (payload.otherMessageId && c.lastMessage.otherMessageId === payload.otherMessageId))) {
             return {
               ...c,
+              // Latest inbound message read (here or on the phone) → whole chat is read.
+              unreadCount: payload.status === 'READ' && c.lastMessage.direction === 'INBOUND' ? 0 : c.unreadCount,
               lastMessage: {
                 ...c.lastMessage,
                 status: payload.status,
