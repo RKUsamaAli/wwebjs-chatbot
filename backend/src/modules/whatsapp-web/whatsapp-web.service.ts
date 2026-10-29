@@ -438,6 +438,32 @@ export class WhatsappWebManager {
     }
 
     await this.cleanupSession(true);
+    await this.wipeAccountData();
+  }
+
+  /**
+   * Removes everything tied to the logged-out account: messages, contacts, account
+   * records and downloaded media, so the next connection starts from a clean slate.
+   */
+  private async wipeAccountData(): Promise<void> {
+    try {
+      const [messages, contacts] = await prisma.$transaction([
+        prisma.message.deleteMany({}),
+        prisma.contact.deleteMany({}),
+        prisma.whatsappAccount.deleteMany({}),
+      ]);
+      logger.info({ messages: messages.count, contacts: contacts.count }, 'Wiped account data from DB');
+    } catch (dbErr) {
+      logger.error(dbErr, 'Failed to wipe account data from DB');
+    }
+
+    for (const dir of [UPLOADS_DIR, path.join(__dirname, '../../../.wwebjs_cache')]) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch (rmErr) {
+        logger.error({ err: rmErr, dir }, 'Failed to delete directory on disconnect');
+      }
+    }
   }
 
   /**

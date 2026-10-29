@@ -13,6 +13,8 @@ import { CheckboxModule } from 'primeng/checkbox';
 
 import { WhatsappWebService } from '../../core/services/whatsapp-web.service';
 import { SocketService } from '../../core/services/socket.service';
+import { MessagesService } from '../../core/services/messages';
+import { ContactsService } from '../../core/services/contacts.service';
 
 @Component({
   selector: 'app-connect',
@@ -44,6 +46,8 @@ export class WhatsappConnectComponent implements OnInit, OnDestroy {
     private messageService: MessageService,
     private wwebService: WhatsappWebService,
     private socketService: SocketService,
+    private messagesService: MessagesService,
+    private contactsService: ContactsService,
   ) {}
 
   ngOnInit(): void {
@@ -117,6 +121,12 @@ export class WhatsappConnectComponent implements OnInit, OnDestroy {
   }
 
   disconnectWweb(): void {
+    if (
+      this.wwebStatus() === 'CONNECTED' &&
+      !confirm('Log out of WhatsApp? This permanently deletes all chats, contacts and media from this CRM.')
+    ) {
+      return;
+    }
     this.wwebLoading.set(true);
     this.wwebService.disconnect().subscribe({
       next: (res) => {
@@ -124,6 +134,11 @@ export class WhatsappConnectComponent implements OnInit, OnDestroy {
         this.wwebQr.set(null);
         this.wwebInfo.set(null);
         this.wwebLoading.set(false);
+        // Server wiped the account data — drop what's cached in the client too.
+        this.messagesService.conversations.set([]);
+        this.messagesService.activeMessages.set([]);
+        this.messagesService.activeConversationPhone.set(null);
+        this.contactsService.contactsList.set([]);
         this.messageService.add({
           severity: 'info',
           summary: 'Disconnected',
