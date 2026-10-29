@@ -92,7 +92,25 @@ async function resolveWaId(phone: string, client: any): Promise<string> {
     return cleanPhone;
   }
 
-  // 1. Try to find the JID from mapped Contacts in the database
+  // 1. Exact JID from the contact's latest inbound message — WhatsApp told us which
+  // chat (@lid or @c.us) it lives in, so no guessing is needed.
+  try {
+    const lastInbound = await prisma.message.findFirst({
+      where: { direction: 'INBOUND', fromDevice: cleanPhone },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (lastInbound) {
+      const jid = JSON.parse(lastInbound.content).jid;
+      if (typeof jid === 'string' && /@(c\.us|lid)$/.test(jid)) {
+        return jid;
+      }
+    }
+  } catch (e) {
+    logger.warn({ err: e, phone: cleanPhone }, 'Failed to resolve JID from inbound message history');
+  }
+
+  // 2. Contact mapping: waId differs from the real phone number only when it is a LID.
+  // (LIDs have no fixed length or prefix, so don't infer the server from the digits.)
   try {
     const contact = await prisma.contact.findFirst({
       where: {
@@ -107,14 +125,14 @@ async function resolveWaId(phone: string, client: any): Promise<string> {
       if (contact.waId.includes('@')) {
         return contact.waId;
       }
-      const suffix = (contact.waId.length >= 15 || contact.waId.startsWith('15')) ? '@lid' : '@c.us';
+      const suffix = contact.waId !== contact.phone ? '@lid' : '@c.us';
       return `${contact.waId}${suffix}`;
     }
   } catch (e) {
     logger.warn({ err: e, phone: cleanPhone }, 'Failed to resolve JID from Contact DB mapping');
   }
 
-  // 2. Try to find the JID from database messages cache
+  // 3. Try to find the JID from database messages cache
   try {
     const lastMsg = await prisma.message.findFirst({
       where: {
@@ -144,7 +162,7 @@ async function resolveWaId(phone: string, client: any): Promise<string> {
     logger.warn({ err: e, phone: cleanPhone }, 'Failed to resolve JID from database cache');
   }
 
-  // 3. Fallback: ask WhatsApp Web client to resolve the JID
+  // 4. Fallback: ask WhatsApp Web client to resolve the JID
   try {
     const resolved = await client.getNumberId(cleanPhone);
     if (resolved && resolved._serialized) {
@@ -154,7 +172,7 @@ async function resolveWaId(phone: string, client: any): Promise<string> {
     logger.warn({ err: e, phone: cleanPhone }, 'Failed to resolve JID via getNumberId');
   }
 
-  // 4. Last fallback: default to @c.us
+  // 5. Last fallback: default to @c.us
   return `${cleanPhone}@c.us`;
 }
 
